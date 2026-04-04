@@ -1,0 +1,39 @@
+name: 官公庁オークション利益チェック
+
+on:
+  schedule:
+    - cron: '0 */3 * * *'  # 3時間ごとに実行（UTC）
+  workflow_dispatch:        # 手動実行も可能
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: パッケージインストール
+        run: pip install -r requirements.txt
+
+      - name: Playwright ブラウザインストール
+        run: playwright install chromium --with-deps
+
+      - name: 利益チェック実行
+        env:
+          KANKOCHO_EMAIL: ${{ secrets.KANKOCHO_EMAIL }}
+          KANKOCHO_PASSWORD: ${{ secrets.KANKOCHO_PASSWORD }}
+        run: python main.py
+
+      - name: Excelファイルをアップロード
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kankocho-profit-${{ github.run_number }}
+          path: "*.xlsx"
+          retention-days: 30
