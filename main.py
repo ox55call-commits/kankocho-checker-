@@ -61,6 +61,11 @@ async def main():
     profitable_items = []
 
     async with KankochoCrawler(KANKOCHO_EMAIL, KANKOCHO_PASSWORD) as crawler:
+        # スケジュール確認
+        if not await crawler.has_active_auctions():
+            log("=== 実施中のオークションなし、終了します ===")
+            return
+
         # ログイン
         logged_in = await crawler.login()
         if not logged_in:
