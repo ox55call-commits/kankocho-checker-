@@ -41,22 +41,66 @@ class KankochoCrawler:
 
     async def login(self) -> bool:
         print("ログイン中...")
-        await self.page.goto(f"{BASE_URL}/login", wait_until="networkidle")
-        await asyncio.sleep(2)
+
+        # トップページを開いてJSが読み込まれるまで待つ
+        await self.page.goto(BASE_URL, wait_until="networkidle")
+        await asyncio.sleep(4)
+
+        # ログインボタン・リンクを探してクリック
+        login_link_selectors = [
+            'a:has-text("ログイン")',
+            'a:has-text("サインイン")',
+            'button:has-text("ログイン")',
+            '[href*="login"]',
+            '[href*="signin"]',
+            '[href*="sign_in"]',
+        ]
+        clicked = False
+        for sel in login_link_selectors:
+            try:
+                el = await self.page.query_selector(sel)
+                if el:
+                    await el.click()
+                    await self.page.wait_for_load_state("networkidle")
+                    await asyncio.sleep(3)
+                    clicked = True
+                    print(f"  ログインリンクをクリック: {sel}")
+                    break
+            except Exception:
+                continue
+
+        if not clicked:
+            # 直接マイページへ移動を試みる
+            await self.page.goto(f"{BASE_URL}/mypage", wait_until="networkidle")
+            await asyncio.sleep(3)
+
+        # スクリーンショット保存（デバッグ用）
+        await self.page.screenshot(path="login_page.png")
+        print(f"  現在のURL: {self.page.url}")
 
         # メールアドレス入力
         email_selectors = [
             'input[type="email"]',
             'input[name="email"]',
+            'input[name="mail"]',
             'input[placeholder*="メール"]',
             'input[placeholder*="mail"]',
+            'input[placeholder*="Email"]',
         ]
+        filled_email = False
         for sel in email_selectors:
             try:
-                await self.page.fill(sel, self.email)
-                break
+                el = await self.page.query_selector(sel)
+                if el:
+                    await el.fill(self.email)
+                    filled_email = True
+                    break
             except Exception:
                 continue
+
+        if not filled_email:
+            print("  メール入力欄が見つかりません")
+            return False
 
         # パスワード入力
         pass_selectors = [
@@ -65,36 +109,44 @@ class KankochoCrawler:
         ]
         for sel in pass_selectors:
             try:
-                await self.page.fill(sel, self.password)
-                break
+                el = await self.page.query_selector(sel)
+                if el:
+                    await el.fill(self.password)
+                    break
             except Exception:
                 continue
 
-        # ログインボタン
-        login_selectors = [
+        # ログインボタン送信
+        submit_selectors = [
             'button[type="submit"]',
             'input[type="submit"]',
             'button:has-text("ログイン")',
             'button:has-text("サインイン")',
+            'button:has-text("sign in")',
         ]
-        for sel in login_selectors:
+        for sel in submit_selectors:
             try:
-                await self.page.click(sel)
-                break
+                el = await self.page.query_selector(sel)
+                if el:
+                    await el.click()
+                    break
             except Exception:
                 continue
 
         await self.page.wait_for_load_state("networkidle")
-        await asyncio.sleep(3)
+        await asyncio.sleep(4)
+
+        # ログイン後スクリーンショット
+        await self.page.screenshot(path="after_login.png")
 
         # ログイン確認
         current_url = self.page.url
         page_text = await self.page.inner_text("body")
         is_logged_in = (
-            "login" not in current_url.lower()
-            or "マイページ" in page_text
+            "マイページ" in page_text
             or "ログアウト" in page_text
-            or "mypage" in page_text.lower()
+            or "mypage" in current_url.lower()
+            or "マイリスト" in page_text
         )
         print(f"ログイン{'成功' if is_logged_in else '失敗'}: {current_url}")
         return is_logged_in
