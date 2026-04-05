@@ -2,16 +2,20 @@ name: 官公庁オークション利益チェック
 
 on:
   schedule:
-    - cron: '0 */3 * * *'  # 3時間ごとに実行（UTC）
-  workflow_dispatch:        # 手動実行も可能
+    - cron: '0 */2 * * *'  # 2時間ごとに実行（UTC）
+  workflow_dispatch:
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # state.jsonをコミットするために必要
 
     steps:
       - name: リポジトリをチェックアウト
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Python セットアップ
         uses: actions/setup-python@v5
@@ -28,13 +32,23 @@ jobs:
         env:
           KANKOCHO_EMAIL: ${{ secrets.KANKOCHO_EMAIL }}
           KANKOCHO_PASSWORD: ${{ secrets.KANKOCHO_PASSWORD }}
+          CHATWORK_TOKEN: ${{ secrets.CHATWORK_TOKEN }}
+          CHATWORK_OWNER_ROOM_ID: ${{ secrets.CHATWORK_OWNER_ROOM_ID }}
         run: python main.py
+
+      - name: 状態ファイルをコミット
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add kankocho_state.json
+          git diff --cached --quiet || git commit -m "Update state [skip ci]"
+          git push
 
       - name: 結果ファイルをアップロード
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: kankocho-profit-${{ github.run_number }}
+          name: kankocho-result-${{ github.run_number }}
           path: |
             *.xlsx
             *.png

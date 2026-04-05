@@ -151,32 +151,41 @@ class KankochoCrawler:
         print(f"ログイン{'成功' if is_logged_in else '失敗'}: {current_url}")
         return is_logged_in
 
-    async def has_active_auctions(self) -> bool:
-        """現在実施中のオークションがあるか確認"""
-        print("オークションスケジュール確認中...")
-        await self.page.goto(BASE_URL, wait_until="networkidle")
-        await asyncio.sleep(3)
+    async def check_schedule(self) -> bool:
+        """スケジュールページで実施中のオークションを確認"""
+        print("スケジュール確認中: https://kankocho.jp/schedules/")
+        await self.page.goto(f"{BASE_URL}/schedules/", wait_until="networkidle")
+        await asyncio.sleep(4)
 
+        await self.page.screenshot(path="schedule_page.png")
         page_text = await self.page.inner_text("body")
+        print(f"  スケジュールページ文字数: {len(page_text)}")
+
+        # 実施中キーワード確認
         for keyword in ACTIVE_KEYWORDS:
             if keyword in page_text:
-                print(f"  → 実施中のオークション検出: 「{keyword}」")
+                print(f"  → 実施中検出: 「{keyword}」")
                 return True
 
-        # 商品一覧ページも確認
-        await self.page.goto(f"{BASE_URL}/search", wait_until="networkidle")
-        await asyncio.sleep(2)
+        # 今日の日付が含まれているか確認（出品期間内の可能性）
+        from datetime import date
+        today = date.today()
+        today_str = today.strftime("%Y/%m/%d")
+        today_str2 = today.strftime("%Y年%m月%d日")
+        if today_str in page_text or today_str2 in page_text:
+            print(f"  → 本日（{today_str}）の日程あり")
+            return True
+
+        # 商品一覧に商品があれば実施中とみなす
+        await self.page.goto(BASE_URL, wait_until="networkidle")
+        await asyncio.sleep(3)
         page_text = await self.page.inner_text("body")
+        item_count_match = re.search(r"(\d+)\s*件", page_text)
+        if item_count_match and int(item_count_match.group(1)) > 0:
+            print(f"  → 出品中の商品あり: {item_count_match.group(0)}")
+            return True
 
-        # 商品が1件でもあれば実施中とみなす
-        item_count_patterns = [r"(\d+)\s*件", r"全\s*(\d+)\s*件"]
-        for pattern in item_count_patterns:
-            match = re.search(pattern, page_text)
-            if match and int(match.group(1)) > 0:
-                print(f"  → 出品中の商品あり: {match.group(0)}")
-                return True
-
-        print("  → 実施中のオークションなし、スキップします")
+        print("  → 実施中のオークションなし")
         return False
 
     async def get_all_items(self) -> list:
