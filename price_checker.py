@@ -57,33 +57,38 @@ def search_aucfan(keyword: str) -> dict:
 
 
 def search_yahoo_auctions(keyword: str) -> dict:
-    """Yahoo!オークションで現在の出品・落札価格を取得"""
+    """Yahoo!オークションの落札済み価格を取得（出品中ではなく実際に売れた価格）"""
+    # f=0x4 で落札済み商品のみ、s1=end&o1=d で終了日降順
     url = (
         f"https://auctions.yahoo.co.jp/search/search"
         f"?p={requests.utils.quote(keyword)}&va={requests.utils.quote(keyword)}"
-        f"&n=20&s1=bids&o1=d&f=0x4"
+        f"&n=20&s1=end&o1=d&f=0x4&istatus=2"
     )
     soup = _get(url)
     if not soup:
         return {}
 
     prices = []
-    for item in soup.select(".Product, .ac-result-list li"):
-        price_el = item.select_one(".Product__priceValue, .price")
+    for item in soup.select(".Product, .ac-result-list li, [class*='product']"):
+        price_el = item.select_one(".Product__priceValue, .price, [class*='price']")
         if price_el:
             price_text = re.sub(r"[^\d]", "", price_el.get_text())
-            if price_text:
+            if price_text and len(price_text) >= 3:
                 prices.append(int(price_text))
 
     if not prices:
         return {}
 
-    prices.sort()
+    prices = sorted(p for p in prices if p >= 100)  # 100円未満は除外
+    if not prices:
+        return {}
+
     return {
-        "source": "yahoo_auctions",
+        "source": "yahoo_落札価格",
         "avg": int(sum(prices) / len(prices)),
         "median": prices[len(prices) // 2],
         "max": max(prices),
+        "min": min(prices),
         "count": len(prices),
     }
 
